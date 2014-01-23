@@ -5,10 +5,11 @@
  */
 
 var TalkUser = (function () {
-    function TalkUser(id, name, connections) {
+    function TalkUser(id, name, connections, image) {
         this.id = id;
         this.name = name;
         this.connections = connections;
+        this.image = image;
         this.refresh();
     }
 

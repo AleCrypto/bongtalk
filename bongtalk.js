@@ -22,6 +22,19 @@ var RedisStore = require('connect-redis')(express);
 var Sockets = require('socket.io');
 var SessionSockets = require('session.socket.io');
 
+var passport = require('passport');
+var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
+
+//var CLIENT_ID = '903724718117-6h98c094rqmqjejtguvs194begfbllns.apps.googleusercontent.com';
+//var CLIENT_SECRET = 'L75iLXjhBtjz7-Nr_nmKikR4';
+//var REDIRECT_URL = 'http://bongtalk.herokuapp.com/oauth2callback';
+
+var GOOGLE_CLIENT_ID = '903724718117-pcm80gbuqpsc4tnsm3vvro90ingluc4t.apps.googleusercontent.com';
+var GOOGLE_CLIENT_SECRET = 'oE7PRpYLAXzt8T_DoprEqp3S';
+var GOOGLE_REDIRECT_URL = 'http://localhost:3000/oauth2callback';
+
+//var oauth2Client = new OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
+
 exports.BongTalk = (function () {
     function BongTalk(servicePort, redisUrl) {
         this.id = Guid.create().value;
@@ -30,7 +43,7 @@ exports.BongTalk = (function () {
         this.sessionStore = new RedisStore({client:this.createRedisClient(this.redisUrl)});
         this.pub = this.createRedisClient(this.redisUrl);
         this.sub = this.createRedisClient(this.redisUrl);
-        this.redisClient = this.createRedisClient(this.redisUrl)
+        this.redisClient = this.createRedisClient(this.redisUrl);
         this.database = new RedisDatabase(this.redisClient, this.id);
         this.connectedUsers = new Object();
     }
@@ -54,6 +67,8 @@ exports.BongTalk = (function () {
         app.use(express.static(path.join(__dirname, 'public')));
         app.use(cookieParser);
         app.use(express.session({store: this.sessionStore, key: 'jsessionid', secret: 'your secret here'}));
+        app.use(passport.initialize());
+        app.use(passport.session());
         app.use(app.router);
 
         // development only
@@ -84,6 +99,62 @@ exports.BongTalk = (function () {
             _this.runApi(req, res);//.apply(_this, [req, res]);
         });
 
+        app.get('/login', function(req, res){
+            res.render('login', { user: req.user });
+        });
+
+        app.get('/auth/google',
+            passport.authenticate('google', {scope: ['https://www.googleapis.com/auth/userinfo.profile'] }),
+            function(req, res){
+                // The request will be redirected to Google for authentication, so this
+                // function will not be called.
+
+                res.redirect('/');
+            });
+
+        app.get('/oauth2callback',
+            passport.authenticate('google', { failureRedirect: '/login'}),
+            function(req, res) {
+                // Successful authentication, redirect home.
+                res.redirect('/');
+            });
+
+
+        // Passport session setup.
+        //   To support persistent login sessions, Passport needs to be able to
+        //   serialize users into and deserialize users out of the session.  Typically,
+        //   this will be as simple as storing the user ID when serializing, and finding
+        //   the user by ID when deserializing.  However, since this example does not
+        //   have a database of user records, the complete Google profile is
+        //   serialized and deserialized.
+        passport.serializeUser(function(user, done) {
+            done(null, user);
+        });
+
+        passport.deserializeUser(function(obj, done) {
+            done(null, obj);
+        });
+
+        passport.use(new GoogleStrategy({
+                clientID: GOOGLE_CLIENT_ID,
+                clientSecret: GOOGLE_CLIENT_SECRET,
+                callbackURL: GOOGLE_REDIRECT_URL
+            },
+            function(accessToken, refreshToken, profile, done) {
+//                User.findOrCreate({ googleId: profile.id }, function (err, user) {
+//                    return done(err, user);
+//                });
+                // asynchronous verification, for effect...
+                process.nextTick(function () {
+
+                    // To keep the example simple, the user's Google profile is returned to
+                    // represent the logged-in user.  In a typical application, you would want
+                    // to associate the Google account with a user record in your database,
+                    // and return that user instead.
+                    return done(null, profile);
+                });
+            }
+        ));
 
         var server = http.createServer(app);
         server.listen(app.get('port'), function () {
@@ -105,30 +176,61 @@ exports.BongTalk = (function () {
                 return;
             }
 
-            var sessionHasId = (session && session.hasOwnProperty('userId'));
-            var thisUser = new Object({
-                id: sessionHasId? session.userId : Guid.create().value,
-                channelId: (socket.handshake.query) ? socket.handshake.query.channelId : 'default',
-                socket:socket,
-                session:session.id
-            });
+            var thisUser = false;
 
-            if (!sessionHasId){
-                _this.sessionStore.get(session.id, function(err, result){
-                    result.userId = thisUser.id;
-                    _this.sessionStore.set(session.id, result);
+            // passport 가 있다! Google, Facebook, 등등등..
+            if (session.passport && session.passport.user && session.passport.user.id){
+                thisUser = {
+                    id: session.passport.user.id,
+                    name: session.passport.user.displayName,
+                    channelId: (socket.handshake.query) ? socket.handshake.query.channelId : 'default',
+                    socket:socket,
+                    session:session.id,
+                    image: ''
+                };
+
+                if (session.passport.user._json && session.passport.user._json.picture){
+                    thisUser.image = session.passport.user._json.picture;
+                }
+
+                _this.database.setUserName(thisUser.channelId, thisUser.id, thisUser.name, function(){
+                    _this.database.setUserImage(thisUser.channelId, thisUser.id, thisUser.image, function(){
+                        _this.database.getUserFromChannel(thisUser.channelId, thisUser.id, function(err, user){
+                            var profile = user;
+                            if (err){
+                                profile = {id:thisUser.id};
+                            }
+                            socket.emit('sendProfile', profile);
+                        });
+                    });
                 });
             }
+            else{
+                var sessionHasId = (session && session.hasOwnProperty('userId'));
+                thisUser = {
+                    id: sessionHasId? session.userId : Guid.create().value,
+                    channelId: (socket.handshake.query) ? socket.handshake.query.channelId : 'default',
+                    socket:socket,
+                    session:session.id
+                };
 
-            util.log("user '" + thisUser.id + "' connected");
-
-            _this.database.getUserFromChannel(thisUser.channelId, thisUser.id, function(err, user){
-                var profile = user;
-                if (err){
-                    profile = {id:thisUser.id};
+                if (!sessionHasId){
+                    _this.sessionStore.get(session.id, function(err, result){
+                        result.userId = thisUser.id;
+                        _this.sessionStore.set(session.id, result);
+                    });
                 }
-                socket.emit('sendProfile', profile);
-            });
+
+                util.log("user '" + thisUser.id + "' connected");
+
+                _this.database.getUserFromChannel(thisUser.channelId, thisUser.id, function(err, user){
+                    var profile = user;
+                    if (err){
+                        profile = {id:thisUser.id};
+                    }
+                    socket.emit('sendProfile', profile);
+                });
+            }
 
             socket.on('joinChannel', function(data) {
                 util.log('joinChannel');

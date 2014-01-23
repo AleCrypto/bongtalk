@@ -180,6 +180,14 @@ exports.RedisDatabase = (function(){
         this.setUserProperty(channelId, userId, 'name', userName, callback);
     }
 
+    RedisDatabase.prototype.getUserImage = function (channelId, userId, callback){
+        this.getUserProperty(channelId, userId, 'image', callback);
+    }
+
+    RedisDatabase.prototype.setUserImage = function (channelId, userId, image, callback){
+        this.setUserProperty(channelId, userId, 'image', image, callback);
+    }
+
     RedisDatabase.prototype.getUserProperty = function (channelId, userId, propertyName, callback){
         this.redisClient.get(this.userKey(channelId, userId, propertyName), callback);
     }
@@ -202,7 +210,7 @@ exports.RedisDatabase = (function(){
     RedisDatabase.prototype.getUserFromChannel = function(channelId, userId, callback){
         var _this = this;
         var _redisClient = this.redisClient;
-        var userProperties = ['name'];
+        var userProperties = ['name', 'image'];
 
         var propertyKeys = userProperties.map(function(property){return _this.userKey(channelId, userId, property);});
         var expireKey = 'Expire:*:Connection:*:' + _this.userKey(channelId, userId, 'isAlive');
@@ -241,7 +249,7 @@ exports.RedisDatabase = (function(){
                 callback(err, []);
             }
             else{
-                var userProperties = ['name'];
+                var userProperties = ['name', 'image'];
                 var multi = _redisClient.multi();
                 userIds.forEach(function(userId){
                     multi.mget(userProperties.map(function(property){return _this.userKey(channelId, userId, property);}));

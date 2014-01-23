@@ -83,24 +83,24 @@ $(function () {
         });
 
         connection.on('newUser', function(data){
-            if (client.addUser(new TalkUser(data.id, data.name, data.connections))){
+            if (client.addUser(new TalkUser(data.id, data.name, data.connections, data.image))){
                 writeSystemMessage(data.name + ' joined.', 'info');
             }
         });
 
         connection.on('sendChannelInfo',function(data){
-            //history 로드
-            if (data.history){
-                data.history.forEach(function(item){
-                    addMessage(item);
+            // 사용자 list 초기화
+            if (data.connectedUsers){
+                data.connectedUsers.forEach(function(item) {
+                    client.addUser(new TalkUser(item.id, item.name, item.connections, item.image));
                 });
             }
 
 
-            // 사용자 list 초기화
-            if (data.connectedUsers){
-                data.connectedUsers.forEach(function(item) {
-                    client.addUser(new TalkUser(item.id, item.name, item.connections));
+            //history 로드
+            if (data.history){
+                data.history.forEach(function(item){
+                    addMessage(item);
                 });
             }
 
@@ -274,8 +274,11 @@ $(function () {
     }
 
     function createOthersMessageElement(id, userId, username, message, dateTime) {
+        var targetUser = client.getUser(userId);
+
+
         return '<div id="m'+ id +'" class="sender userId'+ userId +'">' +
-            '<img class="sender_img" src="/image/avatar-blank.jpg" />' +
+            '<img class="sender_img" src="'+ ((targetUser && targetUser.image) ? targetUser.image : '/image/avatar-blank.jpg') +'" />' +
             '<div class="sender_content">' +
             '<span class="sender_name">' + username + '</span>' +
             '<div class="bubble">' +
@@ -321,6 +324,11 @@ $(function () {
     $('#leaveChannelModalButton').click(function(){
         connection.emit('leaveChannel');
         location.href = location.origin + '/status';
+    });
+
+    $('#loginWithGoogleButton').click(function(){
+       connection.emit('leaveChannel');
+        location.href = location.origin + '/auth/google';
     });
 
     /**
