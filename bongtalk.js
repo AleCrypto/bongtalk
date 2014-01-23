@@ -25,13 +25,13 @@ var SessionSockets = require('session.socket.io');
 var passport = require('passport');
 var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
 
-//var CLIENT_ID = '903724718117-6h98c094rqmqjejtguvs194begfbllns.apps.googleusercontent.com';
-//var CLIENT_SECRET = 'L75iLXjhBtjz7-Nr_nmKikR4';
-//var REDIRECT_URL = 'http://bongtalk.herokuapp.com/oauth2callback';
+var GOOGLE_CLIENT_ID = '903724718117-6h98c094rqmqjejtguvs194begfbllns.apps.googleusercontent.com';
+var GOOGLE_CLIENT_SECRET = 'L75iLXjhBtjz7-Nr_nmKikR4';
+var GOOGLE_REDIRECT_URL = 'http://bongtalk.herokuapp.com/oauth2callback';
 
-var GOOGLE_CLIENT_ID = '903724718117-pcm80gbuqpsc4tnsm3vvro90ingluc4t.apps.googleusercontent.com';
-var GOOGLE_CLIENT_SECRET = 'oE7PRpYLAXzt8T_DoprEqp3S';
-var GOOGLE_REDIRECT_URL = 'http://localhost:3000/oauth2callback';
+//var GOOGLE_CLIENT_ID = '903724718117-pcm80gbuqpsc4tnsm3vvro90ingluc4t.apps.googleusercontent.com';
+//var GOOGLE_CLIENT_SECRET = 'oE7PRpYLAXzt8T_DoprEqp3S';
+//var GOOGLE_REDIRECT_URL = 'http://localhost:3000/oauth2callback';
 
 //var oauth2Client = new OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
 
