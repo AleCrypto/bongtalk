@@ -323,12 +323,12 @@ $(function () {
 
     $('#leaveChannelModalButton').click(function(){
         connection.emit('leaveChannel');
-        location.href = location.origin + '/status';
+        location.href = '/status';
     });
 
     $('#loginWithGoogleButton').click(function(){
        connection.emit('leaveChannel');
-        location.href = location.origin + '/auth/google';
+        location.href = '/auth/google';
     });
 
     /**
