@@ -1,0 +1,5 @@
+{
+	"clientID" : "903724718117-pcm80gbuqpsc4tnsm3vvro90ingluc4t.apps.googleusercontent.com",
+	"clientSecret" : "oE7PRpYLAXzt8T_DoprEqp3S",
+	"callbackURL" : "http://localhost:3000/oauth2callback"
+}

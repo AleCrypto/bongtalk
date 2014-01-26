@@ -328,7 +328,7 @@ $(function () {
 
     $('#loginWithGoogleButton').click(function(){
        connection.emit('leaveChannel');
-        location.href = '/auth/google';
+        location.href = '/auth/google?channelId=' + client.channelId;
     });
 
     /**

@@ -10,7 +10,7 @@ var http = require('http');
 var path = require('path');
 var util = require('util');
 var redis = require("redis");
-var Guid = require('guid');
+var guid = require('guid');
 var models = require('./models');
 
 var async = require('async');
@@ -25,19 +25,19 @@ var SessionSockets = require('session.socket.io');
 var passport = require('passport');
 var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
 
-var GOOGLE_CLIENT_ID = '903724718117-6h98c094rqmqjejtguvs194begfbllns.apps.googleusercontent.com';
-var GOOGLE_CLIENT_SECRET = 'L75iLXjhBtjz7-Nr_nmKikR4';
-var GOOGLE_REDIRECT_URL = 'http://bongtalk.herokuapp.com/oauth2callback';
+// var GOOGLE_CLIENT_ID = '903724718117-6h98c094rqmqjejtguvs194begfbllns.apps.googleusercontent.com';
+// var GOOGLE_CLIENT_SECRET = 'L75iLXjhBtjz7-Nr_nmKikR4';
+// var GOOGLE_REDIRECT_URL = 'http://bongtalk.herokuapp.com/oauth2callback';
 
-//var GOOGLE_CLIENT_ID = '903724718117-pcm80gbuqpsc4tnsm3vvro90ingluc4t.apps.googleusercontent.com';
-//var GOOGLE_CLIENT_SECRET = 'oE7PRpYLAXzt8T_DoprEqp3S';
-//var GOOGLE_REDIRECT_URL = 'http://localhost:3000/oauth2callback';
+var GOOGLE_CLIENT_ID = '903724718117-pcm80gbuqpsc4tnsm3vvro90ingluc4t.apps.googleusercontent.com';
+var GOOGLE_CLIENT_SECRET = 'oE7PRpYLAXzt8T_DoprEqp3S';
+var GOOGLE_REDIRECT_URL = 'http://localhost:3000/oauth2callback';
 
 //var oauth2Client = new OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
 
 exports.BongTalk = (function () {
-    function BongTalk(servicePort, redisUrl) {
-        this.id = Guid.create().value;
+    function BongTalk(servicePort, redisUrl, options) {
+        this.id = guid.create().value;
         this.servicePort = servicePort;
         this.redisUrl = redisUrl;
         this.sessionStore = new RedisStore({client:this.createRedisClient(this.redisUrl)});
@@ -46,6 +46,7 @@ exports.BongTalk = (function () {
         this.redisClient = this.createRedisClient(this.redisUrl);
         this.database = new RedisDatabase(this.redisClient, this.id);
         this.connectedUsers = new Object();
+        this.options = options;
     }
 
     BongTalk.prototype.start = function (){
@@ -77,7 +78,7 @@ exports.BongTalk = (function () {
         }
 
         app.get('/', function(req, res){
-            res.render('channel', { channel: 'default' });
+            res.render('index', { channel: 'default' });
         });
 
         var channelAlias = ['channel', 'ch', 'zone'];
@@ -103,7 +104,7 @@ exports.BongTalk = (function () {
             res.render('login', { user: req.user });
         });
 
-        app.get('/auth/google',
+        app.get('/authpass/google',
             passport.authenticate('google', {scope: ['https://www.googleapis.com/auth/userinfo.profile'] }),
             function(req, res){
                 // The request will be redirected to Google for authentication, so this
@@ -112,11 +113,21 @@ exports.BongTalk = (function () {
                 res.redirect('/');
             });
 
+        var passingChannel = {};
+
+        app.get('/auth/google', function(req, res){
+            passingChannel[req.session.id] = req.query.channelId;
+            res.redirect('/authpass/google');
+        });
+
         app.get('/oauth2callback',
             passport.authenticate('google', { failureRedirect: '/login'}),
             function(req, res) {
-                // Successful authentication, redirect home.
-                res.redirect('/');
+                // Successful authentication.
+                var channelId = passingChannel[req.session.id];
+                delete passingChannel[req.session.id];
+                
+                res.redirect('/channel/' + channelId);
             });
 
 
@@ -135,26 +146,25 @@ exports.BongTalk = (function () {
             done(null, obj);
         });
 
-        passport.use(new GoogleStrategy({
-                clientID: GOOGLE_CLIENT_ID,
-                clientSecret: GOOGLE_CLIENT_SECRET,
-                callbackURL: GOOGLE_REDIRECT_URL
-            },
-            function(accessToken, refreshToken, profile, done) {
-//                User.findOrCreate({ googleId: profile.id }, function (err, user) {
-//                    return done(err, user);
-//                });
-                // asynchronous verification, for effect...
-                process.nextTick(function () {
+        if (this.options.authentication.google){
+            passport.use(new GoogleStrategy(this.options.authentication.google,
+                function(accessToken, refreshToken, profile, done) {
+    //                User.findOrCreate({ googleId: profile.id }, function (err, user) {
+    //                    return done(err, user);
+    //                });
+                    // asynchronous verification, for effect...
+                    process.nextTick(function () {
 
-                    // To keep the example simple, the user's Google profile is returned to
-                    // represent the logged-in user.  In a typical application, you would want
-                    // to associate the Google account with a user record in your database,
-                    // and return that user instead.
-                    return done(null, profile);
-                });
-            }
-        ));
+                        // To keep the example simple, the user's Google profile is returned to
+                        // represent the logged-in user.  In a typical application, you would want
+                        // to associate the Google account with a user record in your database,
+                        // and return that user instead.
+                        return done(null, profile);
+                    });
+                }
+            ));
+        }
+        
 
         var server = http.createServer(app);
         server.listen(app.get('port'), function () {
@@ -193,22 +203,40 @@ exports.BongTalk = (function () {
                     thisUser.image = session.passport.user._json.picture;
                 }
 
-                _this.database.setUserName(thisUser.channelId, thisUser.id, thisUser.name, function(){
-                    _this.database.setUserImage(thisUser.channelId, thisUser.id, thisUser.image, function(){
-                        _this.database.getUserFromChannel(thisUser.channelId, thisUser.id, function(err, user){
-                            var profile = user;
-                            if (err){
-                                profile = {id:thisUser.id};
-                            }
-                            socket.emit('sendProfile', profile);
-                        });
-                    });
+                async.waterfall([
+                    function (callback) {
+                        _this.database.setUserName(thisUser.channelId, thisUser.id, thisUser.name, callback);
+                    },
+                    function (result, callback){
+                        _this.database.setUserImage(thisUser.channelId, thisUser.id, thisUser.image, callback);
+                    },
+                    function (result, callback) {   
+                        _this.database.getUserFromChannel(thisUser.channelId, thisUser.id, callback);
+                    }], function(err, user){
+                        if (err) {
+                            util.log(err);
+                            socket.emit('sendProfile', {id:thisUser.id});
+                        }
+                        else{
+                            socket.emit('sendProfile', user);
+                        }
                 });
+                // _this.database.setUserName(thisUser.channelId, thisUser.id, thisUser.name, function(){
+                //     _this.database.setUserImage(thisUser.channelId, thisUser.id, thisUser.image, function(){
+                //         _this.database.getUserFromChannel(thisUser.channelId, thisUser.id, function(err, user){
+                //             var profile = user;
+                //             if (err){
+                //                 profile = {id:thisUser.id};
+                //             }
+                //             socket.emit('sendProfile', profile);
+                //         });
+                //     });
+                // });
             }
             else{
                 var sessionHasId = (session && session.hasOwnProperty('userId'));
                 thisUser = {
-                    id: sessionHasId? session.userId : Guid.create().value,
+                    id: sessionHasId? session.userId : guid.create().value,
                     channelId: (socket.handshake.query) ? socket.handshake.query.channelId : 'default',
                     socket:socket,
                     session:session.id
@@ -273,7 +301,7 @@ exports.BongTalk = (function () {
 
             socket.on('sendMessage', function(data){
                 var talk = {
-                    id: Guid.create().value,
+                    id: guid.create().value,
                     time: (new Date()).getTime(),
                     message: data,
                     user: {

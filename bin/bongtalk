@@ -1,15 +1,33 @@
 #!/usr/bin/env node
-
+var fs = require('fs');
+var util = require('util');
 var command = require('optimist')
-    .usage('Usage : $0 --port [num] --redisurl [url]')
+    .usage('Usage : $0 --port [num] --redisurl [url] --googleauthsetting [path]')
     .alias('p', 'port')
     .describe('p', 'listen port')
     .alias('r', 'redisurl')
-    .describe('r', 'redis url');
+    .describe('r', 'redis url')
+    .alias('ga', 'googleauthsetting')
+    .describe('ga', 'google authentication setting file path');
+
 
 if (!process.env.PORT) {
     command = command.demand(['port'])
 }
+
+var options = {authentication:{}};
+
+// Authentication file parsing
+if (command.argv.googleauthsetting) {
+	var googleAuthSettingString = fs.readFileSync(command.argv.googleauthsetting, 'utf8');
+	options.authentication.google = JSON.parse(googleAuthSettingString);
+	
+	util.log('Google authentication file found : \n' + util.inspect({ 
+		path : command.argv.googleauthsetting, 
+		data : options.authentication.google
+	}, {colors:true}));
+}
+
 
 var port = process.env.PORT || command.argv.port;
 //var redisUrl = process.env.REDISTOGO_URL || command.argv.redisurl;
@@ -17,6 +35,8 @@ var port = process.env.PORT || command.argv.port;
 var redisUrl =  command.argv.redisurl || 'redis://talsu.net/';
 
 var BongTalk = require('../').BongTalk;
-var talkServer = new BongTalk(port, redisUrl);
+
+var talkServer = new BongTalk(port, redisUrl, options);
+
 talkServer.start();
 

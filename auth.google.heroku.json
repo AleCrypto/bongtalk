@@ -1,0 +1,5 @@
+{
+	"clientID" : "903724718117-6h98c094rqmqjejtguvs194begfbllns.apps.googleusercontent.com",
+	"clientSecret" : "L75iLXjhBtjz7-Nr_nmKikR4",
+	"callbackURL" : "http://bongtalk.herokuapp.com/oauth2callback"
+}
